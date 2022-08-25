@@ -2,7 +2,8 @@ import http from 'k6/http';
 import { sleep } from 'k6';
 
 export default function () {
-    http.get('https://localhost:8080');
+    // http.get('https://localhost:8080');
+    http.get('cool-water-1296.fly.dev'); // make this env var
     sleep(1);
 }
 
