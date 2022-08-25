@@ -23,4 +23,4 @@ jobs:
         uses: grafana/k6-action@v0.2.0
         with:
           filename: script.js
-          flags: --vus 50 --duration 10s
+          flags: --vus 50 --duration 10s -e APP_HOST=${{ env.APP_HOST }}

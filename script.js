@@ -3,8 +3,9 @@ import { sleep } from 'k6';
 
 export default function () {
     // http.get('https://localhost:8080');
-    console.log("APP_HOST=", process.env.APP_HOST)
-    http.get('cool-water-1296.fly.dev'); // make this env var
+    // console.log("APP_HOST=", process.env.APP_HOST)
+    const res = http.get(`http://${__ENV.APP_HOST}/`);
+    // http.get('cool-water-1296.fly.dev'); // make this env var
     sleep(1);
 }
 
