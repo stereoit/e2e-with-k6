@@ -10,3 +10,17 @@ jobs:
       - uses: actions/checkout@v2
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - run: flyctl deploy --remote-only
+      - run: echo "APP_HOST=$(flyctl status -j |jq .Hostname)" >> $GITHUB_ENV
+  
+  e2e_test:
+    name: End to end tests
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Run k6 local test
+        uses: grafana/k6-action@v0.2.0
+        with:
+          filename: script.js
+          flags: --vus 50 --duration 10s
