@@ -10,7 +10,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - run: flyctl deploy --remote-only
-      - run: echo "APP_HOST=$(flyctl status -j |jq .Hostname)" |tee >> $GITHUB_ENV | 
+      - run: echo "APP_HOST=$(flyctl status -j |jq .Hostname)" |tee -a $GITHUB_ENV 
   
   e2e_test:
     name: End to end tests
