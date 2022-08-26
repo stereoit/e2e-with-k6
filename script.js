@@ -10,7 +10,7 @@ const SLEEP_DURATION = 0.1;
 const baseUrl = __ENV.APP_HOST;
 
 export default function () {
-    const res = http.get(`http://${baseUrl}/`);
+    const res = http.get(`https://${baseUrl}/`);
     sleep(1);
 
     const params = {
