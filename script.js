@@ -16,7 +16,10 @@ export default function () {
     const params = {
         headers: {
             'Content-Type': 'application/json',
-        }
+        },
+        tags: {
+            name: 'test',
+        },
     };
 
     // const login_response = login();
