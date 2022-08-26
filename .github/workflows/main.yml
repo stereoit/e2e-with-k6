@@ -6,23 +6,26 @@ jobs:
   deploy:
     name: Deploy app
     runs-on: ubuntu-latest
+    outputs:
+      app_host: ${{ steps.deploy.outputs.env.app_host }}
     steps:
       - uses: actions/checkout@v3
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - run: flyctl deploy --remote-only
-      - run: echo "APP_HOST=$(flyctl status -j |jq .Hostname)" |tee -a $GITHUB_ENV 
+      - id: env
+        run: echo "::set-output name=app_host::$(flyctl status -j |jq .Hostname|tr -d '"')"
+      - run: echo "APP_HOST=$(flyctl status -j |jq .Hostname|tr -d '"')" |tee -a $GITHUB_ENV 
   
   e2e_test:
     name: End to end tests
     needs: deploy
     runs-on: ubuntu-latest
-    env:
-      APP_HOST: cool-water-1296.fly.dev
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+      - run: echo ${{ needs.deploy.outputs.app_host }}
       - name: Run k6 local test
         uses: grafana/k6-action@v0.2.0
         with:
           filename: script.js
-          flags: --vus 50 --duration 10s -e APP_HOST=${{ env.APP_HOST }}
+          flags: --vus 50 --duration 10s -e APP_HOST=${{ needs.deploy.outputs.app_host }}
