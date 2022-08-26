@@ -13,7 +13,8 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - run: flyctl deploy --remote-only
       - id: env
-        run: echo "::set-output name=app_host::$(flyctl status -j |jq .Hostname|tr -d '"')"
+        # run: echo "::set-output name=app_host::$(flyctl status -j |jq .Hostname|tr -d '"')"
+        run: echo '::set-output name=app_host::cool-water-1296.fly.dev'
       - run: echo "APP_HOST=$(flyctl status -j |jq .Hostname|tr -d '"')" |tee -a $GITHUB_ENV 
   
   e2e_test:
