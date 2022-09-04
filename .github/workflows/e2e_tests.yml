@@ -1,0 +1,39 @@
+name: End-to-End Tests
+on: 
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Deploy]
+    types:
+      - completed
+
+  # push:
+  #   branches:
+  #     - main
+  #     - feature/cicd
+jobs:
+  on-success:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - run: echo 'The triggering workflow passed'
+  on-failure:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    steps:
+      - run: echo 'The triggering workflow failed'
+  e2e_test:
+    name: End to end tests
+    runs-on: ubuntu-latest
+    env:
+      APP_HOST: https://cool-water-1296.fly.dev/
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      # - run: echo ${{ needs.deploy.outputs.app_host }}
+      - run: echo $APP_HOST
+      - name: Run k6 local test
+        uses: grafana/k6-action@v0.2.0
+        with:
+          filename: e2e/script.js
+          flags: --vus 50 --duration 10s -e APP_HOST=$APP_HOST
+          # flags: --vus 50 --duration 10s -e APP_HOST=${{ needs.deploy.outputs.app_host }}
