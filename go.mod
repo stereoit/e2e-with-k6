@@ -1,4 +1,4 @@
-module stereoit.com/e2etests
+module github/com/stereoit/e2etests
 
 go 1.18
 

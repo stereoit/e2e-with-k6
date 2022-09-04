@@ -6,11 +6,12 @@ import (
 	"os"
 	"time"
 
+	"github/com/stereoit/e2etests/pkg/articles"
+	"github/com/stereoit/e2etests/pkg/fly"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
-	"stereoit.com/e2etests/pkg/articles"
-	"stereoit.com/e2etests/pkg/fly"
 )
 
 func main() {

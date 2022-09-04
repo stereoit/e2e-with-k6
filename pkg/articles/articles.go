@@ -8,9 +8,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github/com/stereoit/e2etests/pkg/rest"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
-	"stereoit.com/e2etests/pkg/rest"
 )
 
 func ListArticles(w http.ResponseWriter, r *http.Request) {
