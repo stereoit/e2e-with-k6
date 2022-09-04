@@ -1,0 +1,9 @@
+[ build ]
+
+  [[ build.env ]]
+    name="BP_GO_TARGETS"
+    value="./cmd/api"
+
+  [[ build.env ]]
+    name="BP_GO_BUILD_IMPORT_PATH"
+    value="github/com/stereoit/e2etests"

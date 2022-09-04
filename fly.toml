@@ -9,6 +9,10 @@ processes = []
   builder = "paketobuildpacks/builder:base"
   buildpacks = ["gcr.io/paketo-buildpacks/go"]
 
+  [[ build.env ]]
+    name="BP_GO_TARGETS"
+    value="./cmd/api"
+
 [env]
   PORT = "8080"
 
