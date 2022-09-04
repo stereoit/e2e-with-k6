@@ -3,18 +3,42 @@ package articles
 import (
 	"context"
 	"errors"
-	"fmt"
-	"math/rand"
 	"net/http"
 	"strings"
 
+	"github/com/stereoit/e2etests/pkg/articles/domain"
 	"github/com/stereoit/e2etests/pkg/rest"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 )
 
-func ListArticles(w http.ResponseWriter, r *http.Request) {
+type ArticleSVC interface {
+	ArticleCtx(next http.Handler) http.Handler
+	CreateArticle(http.ResponseWriter, *http.Request)
+	DeleteArticle(http.ResponseWriter, *http.Request)
+	UpdateArticle(http.ResponseWriter, *http.Request)
+	ListArticles(http.ResponseWriter, *http.Request)
+	GetArticle(http.ResponseWriter, *http.Request)
+}
+
+type articleSVC struct {
+	repo ArticleRepo
+}
+
+func New(repo ArticleRepo) ArticleSVC {
+	return &articleSVC{
+		repo: repo,
+	}
+}
+
+func (s *articleSVC) ListArticles(w http.ResponseWriter, r *http.Request) {
+	articles, err := s.repo.List()
+	if err != nil {
+		render.Render(w, r, rest.ErrRender(err))
+		return
+	}
+
 	if err := render.RenderList(w, r, NewArticleListResponse(articles)); err != nil {
 		render.Render(w, r, rest.ErrRender(err))
 		return
@@ -23,18 +47,18 @@ func ListArticles(w http.ResponseWriter, r *http.Request) {
 
 type ArticleKey string
 
+var articleKey ArticleKey = "article"
+
 // ArticleCtx middleware is used to load an Article object from
 // the URL parameters passed through as the request. In case
 // the Article could not be found, we stop here and return a 404.
-func ArticleCtx(next http.Handler) http.Handler {
+func (s *articleSVC) ArticleCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var article *Article
+		var article *domain.Article
 		var err error
 
 		if articleID := chi.URLParam(r, "articleID"); articleID != "" {
-			article, err = dbGetArticle(articleID)
-		} else if articleSlug := chi.URLParam(r, "articleSlug"); articleSlug != "" {
-			article, err = dbGetArticleBySlug(articleSlug)
+			article, err = s.dbGetArticle(articleID)
 		} else {
 			render.Render(w, r, rest.ErrNotFound)
 			return
@@ -44,7 +68,6 @@ func ArticleCtx(next http.Handler) http.Handler {
 			return
 		}
 
-		var articleKey ArticleKey = "article"
 		ctx := context.WithValue(r.Context(), articleKey, article)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -52,7 +75,7 @@ func ArticleCtx(next http.Handler) http.Handler {
 
 // CreateArticle persists the posted Article and returns it
 // back to the client as an acknowledgement.
-func CreateArticle(w http.ResponseWriter, r *http.Request) {
+func (s *articleSVC) CreateArticle(w http.ResponseWriter, r *http.Request) {
 	data := &ArticleRequest{}
 	if err := render.Bind(r, data); err != nil {
 		render.Render(w, r, rest.ErrInvalidRequest(err))
@@ -60,7 +83,7 @@ func CreateArticle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	article := data.Article
-	dbNewArticle(article)
+	s.dbNewArticle(article)
 
 	render.Status(r, http.StatusCreated)
 	render.Render(w, r, NewArticleResponse(article))
@@ -70,11 +93,11 @@ func CreateArticle(w http.ResponseWriter, r *http.Request) {
 // fetches the Article right off the context, as its understood that
 // if we made it this far, the Article must be on the context. In case
 // its not due to a bug, then it will panic, and our Recoverer will save us.
-func GetArticle(w http.ResponseWriter, r *http.Request) {
+func (s *articleSVC) GetArticle(w http.ResponseWriter, r *http.Request) {
 	// Assume if we've reach this far, we can access the article
 	// context because this handler is a child of the ArticleCtx
 	// middleware. The worst case, the recoverer middleware will save us.
-	article := r.Context().Value("article").(*Article)
+	article := r.Context().Value(articleKey).(*domain.Article)
 
 	if err := render.Render(w, r, NewArticleResponse(article)); err != nil {
 		render.Render(w, r, rest.ErrRender(err))
@@ -83,8 +106,8 @@ func GetArticle(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateArticle updates an existing Article in our persistent store.
-func UpdateArticle(w http.ResponseWriter, r *http.Request) {
-	article := r.Context().Value("article").(*Article)
+func (s *articleSVC) UpdateArticle(w http.ResponseWriter, r *http.Request) {
+	article := r.Context().Value("article").(*domain.Article)
 
 	data := &ArticleRequest{Article: article}
 	if err := render.Bind(r, data); err != nil {
@@ -92,47 +115,31 @@ func UpdateArticle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	article = data.Article
-	dbUpdateArticle(article.ID, article)
-
-	render.Render(w, r, NewArticleResponse(article))
-}
-
-// DeleteArticle removes an existing Article from our persistent store.
-func DeleteArticle(w http.ResponseWriter, r *http.Request) {
-	var err error
-
-	// Assume if we've reach this far, we can access the article
-	// context because this handler is a child of the ArticleCtx
-	// middleware. The worst case, the recoverer middleware will save us.
-	article := r.Context().Value("article").(*Article)
-
-	article, err = dbRemoveArticle(article.ID)
+	err := s.repo.Update(article)
 	if err != nil {
-		render.Render(w, r, rest.ErrInvalidRequest(err))
+		render.Render(w, r, rest.ErrRender(err))
 		return
 	}
 
 	render.Render(w, r, NewArticleResponse(article))
 }
 
-type UserPayload struct {
-	*User
-	Role string `json:"role"`
-}
+// DeleteArticle removes an existing Article from our persistent store.
+func (s *articleSVC) DeleteArticle(w http.ResponseWriter, r *http.Request) {
+	var err error
 
-func NewUserPayloadResponse(user *User) *UserPayload {
-	return &UserPayload{User: user}
-}
+	// Assume if we've reach this far, we can access the article
+	// context because this handler is a child of the ArticleCtx
+	// middleware. The worst case, the recoverer middleware will save us.
+	article := r.Context().Value(articleKey).(*domain.Article)
 
-// Bind on UserPayload will run after the unmarshalling is complete, its
-// a good time to focus some post-processing after a decoding.
-func (u *UserPayload) Bind(r *http.Request) error {
-	return nil
-}
+	article, err = s.dbRemoveArticle(article.ID)
+	if err != nil {
+		render.Render(w, r, rest.ErrInvalidRequest(err))
+		return
+	}
 
-func (u *UserPayload) Render(w http.ResponseWriter, r *http.Request) error {
-	u.Role = "collaborator"
-	return nil
+	render.Render(w, r, NewArticleResponse(article))
 }
 
 // ArticleRequest is the request payload for Article data model.
@@ -145,9 +152,7 @@ func (u *UserPayload) Render(w http.ResponseWriter, r *http.Request) error {
 // in the data model. Also, check out this awesome blog post on struct composition:
 // http://attilaolah.eu/2014/09/10/json-and-struct-composition-in-go/
 type ArticleRequest struct {
-	*Article
-
-	User *UserPayload `json:"user,omitempty"`
+	*domain.Article
 
 	ProtectedID string `json:"id"` // override 'id' json to have more control
 }
@@ -158,10 +163,6 @@ func (a *ArticleRequest) Bind(r *http.Request) error {
 	if a.Article == nil {
 		return errors.New("missing required Article fields")
 	}
-
-	// a.User is nil if no Userpayload fields are sent in the request. In this app
-	// this won't cause a panic, but checks in this Bind method may be required if
-	// a.User or futher nested fields like a.User.Name are accessed elsewhere.
 
 	// just a post-process after a decode..
 	a.ProtectedID = ""                                 // unset the protected ID
@@ -176,34 +177,21 @@ func (a *ArticleRequest) Bind(r *http.Request) error {
 // then the next field, and so on, all the way down the tree.
 // Render is called in top-down order, like a http handler middleware chain.
 type ArticleResponse struct {
-	*Article
-
-	User *UserPayload `json:"user,omitempty"`
-
-	// We add an additional field to the response here.. such as this
-	// elapsed computed property
-	Elapsed int64 `json:"elapsed"`
+	*domain.Article
 }
 
-func NewArticleResponse(article *Article) *ArticleResponse {
+func NewArticleResponse(article *domain.Article) *ArticleResponse {
 	resp := &ArticleResponse{Article: article}
-
-	if resp.User == nil {
-		if user, _ := dbGetUser(resp.UserID); user != nil {
-			resp.User = NewUserPayloadResponse(user)
-		}
-	}
 
 	return resp
 }
 
 func (rd *ArticleResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	// Pre-processing before a response is marshalled and sent across the wire
-	rd.Elapsed = 10
 	return nil
 }
 
-func NewArticleListResponse(articles []*Article) []render.Renderer {
+func NewArticleListResponse(articles []*domain.Article) []render.Renderer {
 	list := []render.Renderer{}
 	for _, article := range articles {
 		list = append(list, NewArticleResponse(article))
@@ -211,85 +199,46 @@ func NewArticleListResponse(articles []*Article) []render.Renderer {
 	return list
 }
 
-// User data model
-type User struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
+type ArticleRepo interface {
+	Save(*domain.Article) (string, error)
+	FindByID(string) (*domain.Article, error)
+	Delete(string) error
+	Update(*domain.Article) error
+	List() ([]*domain.Article, error)
+
+	// Populate
+	Populate() error
 }
 
-// Article data model. I suggest looking at https://upper.io for an easy
-// and powerful data persistence adapter.
-type Article struct {
-	ID     string `json:"id"`
-	UserID int64  `json:"user_id"` // the author
-	Title  string `json:"title"`
-	Slug   string `json:"slug"`
-}
-
-// Article fixture data
-var articles = []*Article{
-	{ID: "1", UserID: 100, Title: "Hi", Slug: "hi"},
-	{ID: "2", UserID: 200, Title: "sup", Slug: "sup"},
-	{ID: "3", UserID: 300, Title: "alo", Slug: "alo"},
-	{ID: "4", UserID: 400, Title: "bonjour", Slug: "bonjour"},
-	{ID: "5", UserID: 500, Title: "whats up", Slug: "whats-up"},
-}
-
-// User fixture data
-var users = []*User{
-	{ID: 100, Name: "Peter"},
-	{ID: 200, Name: "Julia"},
-}
-
-func dbNewArticle(article *Article) (string, error) {
-	article.ID = fmt.Sprintf("%d", rand.Intn(100)+10)
-	articles = append(articles, article)
-	return article.ID, nil
-}
-
-func dbGetArticle(id string) (*Article, error) {
-	for _, a := range articles {
-		if a.ID == id {
-			return a, nil
-		}
+func (s *articleSVC) dbNewArticle(article *domain.Article) (string, error) {
+	id, err := s.repo.Save(article)
+	if err != nil {
+		return "", err
 	}
-	return nil, errors.New("article not found")
+
+	// articles = append(articles, article)
+	return id, nil
 }
 
-func dbGetArticleBySlug(slug string) (*Article, error) {
-	for _, a := range articles {
-		if a.Slug == slug {
-			return a, nil
-		}
+func (s *articleSVC) dbGetArticle(id string) (*domain.Article, error) {
+	article, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, errors.New("article not found")
 	}
-	return nil, errors.New("article not found")
+	return article, nil
 }
 
-func dbUpdateArticle(id string, article *Article) (*Article, error) {
-	for i, a := range articles {
-		if a.ID == id {
-			articles[i] = article
-			return article, nil
-		}
+func (s *articleSVC) dbRemoveArticle(id string) (*domain.Article, error) {
+	article, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, errors.New("article not found")
 	}
-	return nil, errors.New("article not found")
-}
 
-func dbRemoveArticle(id string) (*Article, error) {
-	for i, a := range articles {
-		if a.ID == id {
-			articles = append((articles)[:i], (articles)[i+1:]...)
-			return a, nil
-		}
+	err = s.repo.Delete(id)
+	if err != nil {
+		return nil, err
 	}
-	return nil, errors.New("article not found")
-}
 
-func dbGetUser(id int64) (*User, error) {
-	for _, u := range users {
-		if u.ID == id {
-			return u, nil
-		}
-	}
-	return nil, errors.New("user not found")
+	return article, nil
+
 }

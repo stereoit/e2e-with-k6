@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github/com/stereoit/e2etests/pkg/articles"
+	"github/com/stereoit/e2etests/pkg/articles/persistence"
 	"github/com/stereoit/e2etests/pkg/fly"
 
 	"github.com/go-chi/chi/v5"
@@ -36,17 +37,21 @@ func main() {
 		w.Write([]byte("all your base belongs to us!"))
 	})
 
+	repo := persistence.New()
+	repo.Populate()
+	articlesSVC := articles.New(repo)
+
 	// RESTy routes for "articles" resource
 	r.Route("/articles", func(r chi.Router) {
-		r.Get("/", articles.ListArticles)   // GET /articles
-		r.Post("/", articles.CreateArticle) // POST /articles
+		r.Get("/", articlesSVC.ListArticles)   // GET /articles
+		r.Post("/", articlesSVC.CreateArticle) // POST /articles
 
 		// Subrouters:
 		r.Route("/{articleID}", func(r chi.Router) {
-			r.Use(articles.ArticleCtx)
-			r.Get("/", articles.GetArticle)       // GET /articles/123
-			r.Put("/", articles.UpdateArticle)    // PUT /articles/123
-			r.Delete("/", articles.DeleteArticle) // DELETE /articles/123
+			r.Use(articlesSVC.ArticleCtx)
+			r.Get("/", articlesSVC.GetArticle)       // GET /articles/123
+			r.Put("/", articlesSVC.UpdateArticle)    // PUT /articles/123
+			r.Delete("/", articlesSVC.DeleteArticle) // DELETE /articles/123
 		})
 	})
 
