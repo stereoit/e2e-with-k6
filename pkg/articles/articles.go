@@ -107,7 +107,7 @@ func (s *articleSVC) GetArticle(w http.ResponseWriter, r *http.Request) {
 
 // UpdateArticle updates an existing Article in our persistent store.
 func (s *articleSVC) UpdateArticle(w http.ResponseWriter, r *http.Request) {
-	article := r.Context().Value("article").(*domain.Article)
+	article := r.Context().Value(articleKey).(*domain.Article)
 
 	data := &ArticleRequest{Article: article}
 	if err := render.Bind(r, data); err != nil {
